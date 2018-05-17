@@ -82,6 +82,9 @@ const main = async args => {
     httpServer,
     safeMode: require('lodash/includes')(args, '--safe-mode'),
   })
+  app.on('stop', () =>
+    require('promise-toolbox').fromCallback(cb => httpServer.stop(cb))
+  )
   await app.start()
 
   // Gracefully shutdown on signals.
