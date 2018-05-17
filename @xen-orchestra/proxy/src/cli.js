@@ -4,23 +4,20 @@ const APP_NAME = 'xo-proxy'
 
 // -------------------------------------------------------------------
 
-require('@xen-orchestra/log/configure').configure(
-  require('@xen-orchestra/log/transports/console').default()
+{
+  const {
+    catchGlobalErrors,
+    configure,
+  } = require('@xen-orchestra/log/configure')
+
+  configure(require('@xen-orchestra/log/transports/console').default())
+
+  catchGlobalErrors(require('@xen-orchestra/log').createLogger('main'))
+}
+
+const { info, warn } = require('@xen-orchestra/log').createLogger(
+  'main:bootstrap'
 )
-
-const { info, warn } = require('@xen-orchestra/log').createLogger('bootstrap')
-
-process.on('unhandledRejection', reason => {
-  warn('possibly unhandled rejection', reason)
-})
-;(({ prototype }) => {
-  const { emit } = prototype
-  prototype.emit = function (event, error) {
-    event === 'error' && !this.listenerCount(event)
-      ? warn('unhandled error event', error)
-      : emit.apply(this, arguments)
-  }
-})(require('events').EventEmitter)
 
 // -------------------------------------------------------------------
 
