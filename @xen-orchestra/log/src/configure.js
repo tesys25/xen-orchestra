@@ -46,7 +46,12 @@ const createTransport = config => {
   return transport
 }
 
-let transport = createTransport({
+const symbol =
+  typeof Symbol !== 'undefined'
+    ? Symbol.for('@xen-orchestra/log')
+    : '@@@xen-orchestra/log'
+
+global[symbol] = createTransport({
   // display warnings or above, and all that are enabled via DEBUG or
   // NODE_DEBUG env
   filter: process.env.DEBUG || process.env.NODE_DEBUG,
@@ -56,7 +61,7 @@ let transport = createTransport({
 })
 
 export const configure = config => {
-  transport = createTransport(config)
+  global[symbol] = createTransport(config)
 }
 
 // -------------------------------------------------------------------

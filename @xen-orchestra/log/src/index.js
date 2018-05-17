@@ -9,7 +9,7 @@ if (!(symbol in global)) {
   // the default behavior, without requiring `configure` is to avoid
   // logging anything unless it's a real error
   const transport = createTransport()
-  global[symbol] = log => log.level > LEVEL.WARN && transport(log)
+  global[symbol] = log => log.level > LEVELS.WARN && transport(log)
 }
 
 // -------------------------------------------------------------------
