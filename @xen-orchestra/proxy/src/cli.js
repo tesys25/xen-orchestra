@@ -15,7 +15,7 @@ const APP_NAME = 'xo-proxy'
   catchGlobalErrors(require('@xen-orchestra/log').createLogger('main'))
 }
 
-const { info, warn } = require('@xen-orchestra/log').createLogger(
+const { fatal, info, warn } = require('@xen-orchestra/log').createLogger(
   'main:bootstrap'
 )
 
@@ -105,5 +105,5 @@ const main = async args => {
 }
 main(process.argv.slice(2)).then(
   () => info('bye :-)'),
-  error => warn('fatal error', error)
+  error => fatal('exception in main', error)
 )
