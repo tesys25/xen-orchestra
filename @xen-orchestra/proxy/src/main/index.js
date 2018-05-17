@@ -4,7 +4,11 @@ const APP_NAME = 'xo-proxy'
 
 // -------------------------------------------------------------------
 
-const { info, warn } = require('@xen-orchestra/log').default('bootstrap')
+require('@xen-orchestra/log/configure').configure(
+  require('@xen-orchestra/log/transports/console').default()
+)
+
+const { info, warn } = require('@xen-orchestra/log').createLogger('bootstrap')
 
 process.on('unhandledRejection', reason => {
   warn('possibly unhandled rejection', reason)
