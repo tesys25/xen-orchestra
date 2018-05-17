@@ -14,7 +14,7 @@
   "preferGlobal": false,
   "main": "dist/",
   "bin": {
-    "xo-proxy": "dist/main"
+    "xo-proxy": "dist/cli"
   },
   "files": [
     "dist/"
@@ -56,7 +56,7 @@
     "dev": "cross-env NODE_ENV=development babel --watch --source-maps --out-dir=dist/ src/",
     "dev-test": "jest --bail --watch",
     "posttest": "jest",
-    "prebuild": "npm run clean && index-modules --cjs-lazy src/main/app/mixins",
+    "prebuild": "npm run clean && index-modules --cjs-lazy src/main/mixins",
     "predev": "npm run prebuild",
     "prepublishOnly": "npm run build",
     "pretest": "eslint --ignore-path .gitignore --fix .",

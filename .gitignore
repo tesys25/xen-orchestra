@@ -10,7 +10,7 @@
 
 /@xen-orchestra/log/src/transports/index.js
 
-/@xen-orchestra/proxy/src/main/app/mixins/index.js
+/@xen-orchestra/proxy/src/main/mixins/index.js
 
 /packages/vhd-cli/src/commands/index.js
 

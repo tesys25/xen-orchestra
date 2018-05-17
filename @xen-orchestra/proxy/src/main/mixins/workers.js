@@ -7,7 +7,7 @@ export default class Workers {
 
   constructor (app) {
     app.on('start', () => {
-      this._worker = new Worker(require.resolve('../../../worker'))
+      this._worker = new Worker(require.resolve('../../worker'))
     })
     app.on('stop', () => this._worker.end())
   }
