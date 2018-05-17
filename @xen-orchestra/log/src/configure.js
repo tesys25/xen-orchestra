@@ -74,8 +74,12 @@ export const catchGlobalErrors = logger => {
   const onUnhandledRejection = error => {
     logger.warn('possibly unhandled rejection', { error })
   }
+  const onWarning = error => {
+    logger.warn('Node warning', { error })
+  }
   process.on('uncaughtException', onUncaughtException)
   process.on('unhandledRejection', onUnhandledRejection)
+  process.on('warning', onWarning)
 
   // patch EventEmitter
   const EventEmitter = require('events')
@@ -91,6 +95,7 @@ export const catchGlobalErrors = logger => {
   return () => {
     process.removeListener('uncaughtException', onUncaughtException)
     process.removeListener('unhandledRejection', onUnhandledRejection)
+    process.removeListener('warning', onWarning)
 
     if (prototype.emit === patchedEmit) {
       prototype.emit = emit
