@@ -7617,7 +7617,7 @@ jsx-ast-utils@^2.0.1:
   dependencies:
     array-includes "^3.0.3"
 
-julien-f-source-map-support@0.1.0:
+julien-f-source-map-support@0.1.0, julien-f-source-map-support@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/julien-f-source-map-support/-/julien-f-source-map-support-0.1.0.tgz#174152c8509538cf666d813eff77cb261711f0af"
   dependencies:

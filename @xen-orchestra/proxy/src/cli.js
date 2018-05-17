@@ -71,6 +71,8 @@ const main = async args => {
     warn('failed to change group/user', error)
   }
 
+  require('julien-f-source-map-support/register')
+
   httpServer = require('stoppable')(httpServer)
 
   const App = require('./main').default

@@ -33,6 +33,7 @@
     "jest-worker": "^22.4.3",
     "json-rpc-protocol": "^0.11.4",
     "jsonwebtoken": "^8.2.1",
+    "julien-f-source-map-support": "^0.1.0",
     "koa": "^2.5.1",
     "lodash": "^4.17.10",
     "promise-toolbox": "^0.9.5",
