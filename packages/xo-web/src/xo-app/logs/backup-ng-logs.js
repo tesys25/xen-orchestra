@@ -1,9 +1,14 @@
 import _, { FormattedDuration } from 'intl'
 import addSubscriptions from 'add-subscriptions'
+import Button from 'button'
+import ButtonGroup from 'button-group'
+import CopyToClipboard from 'react-copy-to-clipboard'
 import Icon from 'icon'
 import NoObjects from 'no-objects'
 import React from 'react'
+import ReportBugButton, { CAN_REPORT_BUG } from 'report-bug-button'
 import SortedTable from 'sorted-table'
+import Tooltip from 'tooltip'
 import { alert } from 'modal'
 import { Card, CardHeader, CardBlock } from 'card'
 import { keyBy } from 'lodash'
@@ -45,11 +50,6 @@ const LOG_COLUMNS = [
     name: _('jobId'),
     itemRenderer: log => log.jobId.slice(4, 8),
     sortCriteria: log => log.jobId,
-  },
-  {
-    name: _('jobMode'),
-    itemRenderer: log => get(() => log.data.mode),
-    sortCriteria: log => get(() => log.data.mode),
   },
   {
     name: _('jobName'),
@@ -107,16 +107,37 @@ const LOG_COLUMNS = [
   },
 ]
 
-const showTasks = log =>
+const showTasks = (log, { jobs }) => {
+  const formattedLog = JSON.stringify(log, null, 2)
   alert(
     <span>
-      {_('jobModalTitle', { job: log.jobId.slice(4, 8) })}{' '}
+      {get(() => jobs[log.jobId].name) || 'Job'} ({log.jobId.slice(4, 8)}){' '}
       <span style={{ fontSize: '0.5em' }} className='text-muted'>
         {log.id}
-      </span>
+      </span>{' '}
+      {log.status !== 'success' &&
+        log.status !== 'pending' && (
+          <ButtonGroup>
+            <Tooltip content={_('copyToClipboard')}>
+              <CopyToClipboard text={formattedLog}>
+                <Button size='small'>
+                  <Icon icon='clipboard' />
+                </Button>
+              </CopyToClipboard>
+            </Tooltip>
+            {CAN_REPORT_BUG && (
+              <ReportBugButton
+                message={`\`\`\`json\n${formattedLog}\n\`\`\``}
+                size='small'
+                title='Backup job failed'
+              />
+            )}
+          </ButtonGroup>
+        )}
     </span>,
-    <LogAlertBody log={log} />
+    <LogAlertBody id={log.id} />
   )
+}
 
 const LOG_INDIVIDUAL_ACTIONS = [
   {

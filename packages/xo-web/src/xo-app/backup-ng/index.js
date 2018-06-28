@@ -13,6 +13,7 @@ import { Container, Row, Col } from 'grid'
 import { NavLink, NavTabs } from 'nav'
 import { routes } from 'utils'
 import {
+  cancelJob,
   deleteBackupNgJobs,
   disableSchedule,
   enableSchedule,
@@ -28,6 +29,7 @@ import Edit from './edit'
 import New from './new'
 import FileRestore from './file-restore'
 import Restore from './restore'
+import Health from './health'
 
 const _runBackupNgJob = ({ id, name, schedule }) =>
   confirm({
@@ -44,6 +46,7 @@ const SchedulePreviewBody = ({ item: job, userData: { schedulesByJob } }) => (
       <th>{_('scheduleCron')}</th>
       <th>{_('scheduleTimezone')}</th>
       <th>{_('scheduleExportRetention')}</th>
+      <th>{_('scheduleCopyRetention')}</th>
       <th>{_('scheduleSnapshotRetention')}</th>
       <th>{_('scheduleRun')}</th>
     </tr>
@@ -52,13 +55,14 @@ const SchedulePreviewBody = ({ item: job, userData: { schedulesByJob } }) => (
         <td>{schedule.cron}</td>
         <td>{schedule.timezone}</td>
         <td>{job.settings[schedule.id].exportRetention}</td>
+        <td>{job.settings[schedule.id].copyRetention}</td>
         <td>{job.settings[schedule.id].snapshotRetention}</td>
         <td>
           <StateButton
-            disabledLabel={_('jobStateDisabled')}
+            disabledLabel={_('stateDisabled')}
             disabledHandler={enableSchedule}
             disabledTooltip={_('logIndicationToEnable')}
-            enabledLabel={_('jobStateEnabled')}
+            enabledLabel={_('stateEnabled')}
             enabledHandler={disableSchedule}
             enabledTooltip={_('logIndicationToDisable')}
             handlerParam={schedule.id}
@@ -66,15 +70,28 @@ const SchedulePreviewBody = ({ item: job, userData: { schedulesByJob } }) => (
           />
         </td>
         <td>
-          <ActionButton
-            btnStyle='primary'
-            data-id={job.id}
-            data-name={job.name}
-            data-schedule={schedule.id}
-            handler={_runBackupNgJob}
-            icon='run-schedule'
-            size='small'
-          />
+          {job.runId !== undefined ? (
+            <ActionButton
+              btnStyle='danger'
+              handler={cancelJob}
+              handlerParam={job}
+              icon='cancel'
+              key='cancel'
+              size='small'
+              tooltip={_('formCancel')}
+            />
+          ) : (
+            <ActionButton
+              btnStyle='primary'
+              data-id={job.id}
+              data-name={job.name}
+              data-schedule={schedule.id}
+              handler={_runBackupNgJob}
+              icon='run-schedule'
+              key='run'
+              size='small'
+            />
+          )}
         </td>
       </tr>
     ))}
@@ -137,7 +154,7 @@ class JobsTable extends React.Component {
       },
       {
         handler: (job, { goTo }) => goTo(`/backup-ng/${job.id}/edit`),
-        label: '',
+        label: _('formEdit'),
         icon: 'edit',
         level: 'primary',
       },
@@ -197,6 +214,10 @@ const HEADER = (
             <Icon icon='menu-backup-file-restore' />{' '}
             {_('backupFileRestorePage')}
           </NavLink>
+          <NavLink to='/backup-ng/health'>
+            <Icon icon='menu-dashboard-health' />{' '}
+            {_('overviewHealthDashboardPage')}
+          </NavLink>
         </NavTabs>
       </Col>
     </Row>
@@ -209,6 +230,7 @@ export default routes('overview', {
   overview: Overview,
   restore: Restore,
   'file-restore': FileRestore,
+  health: Health,
 })(({ children }) => (
   <Page header={HEADER} title='backupPage' formatTitle>
     {children}

@@ -6,40 +6,76 @@ import renderXoItem, { renderXoItemFromId } from 'render-xo-item'
 import Select from 'form/select'
 import Tooltip from 'tooltip'
 import Upgrade from 'xoa-upgrade'
-import { addSubscriptions, resolveId, resolveIds } from 'utils'
-import { Card, CardBlock, CardHeader } from 'card'
-import { Container, Col, Row } from 'grid'
 import {
-  find,
-  findKey,
+  addSubscriptions,
+  generateRandomId,
+  resolveId,
+  resolveIds,
+} from 'utils'
+import { Card, CardBlock, CardHeader } from 'card'
+import { constructSmartPattern, destructSmartPattern } from 'smart-backup'
+import { Container, Col, Row } from 'grid'
+import { injectState, provideState } from '@julien-f/freactal'
+import { SelectRemote, SelectSr, SelectVm } from 'select-objects'
+import { Toggle } from 'form'
+import {
+  cloneDeep,
   flatten,
-  get,
+  forEach,
   includes,
   isEmpty,
   keyBy,
   map,
+  mapValues,
   some,
 } from 'lodash'
-import { injectState, provideState } from '@julien-f/freactal'
-import { Toggle } from 'form'
-import { constructSmartPattern, destructSmartPattern } from 'smart-backup'
-import { SelectRemote, SelectSr, SelectVm } from 'select-objects'
 import {
   createBackupNgJob,
   createSchedule,
   deleteSchedule,
   editBackupNgJob,
   editSchedule,
+  isSrWritable,
   subscribeRemotes,
 } from 'xo'
 
 import Schedules from './schedules'
 import SmartBackup from './smart-backup'
-import { FormGroup, getRandomId, Input, Number, Ul, Li } from './utils'
+import { FormFeedback, FormGroup, Input, Number, Ul, Li } from './utils'
 
 // ===================================================================
 
-const normaliseTagValues = values => resolveIds(values).map(value => [value])
+const normalizeTagValues = values => resolveIds(values).map(value => [value])
+
+const normalizeCopyRetention = settings => {
+  forEach(settings, schedule => {
+    if (schedule.copyRetention === undefined) {
+      schedule.copyRetention = schedule.exportRetention
+    }
+  })
+}
+
+const normalizeSettings = ({
+  settings,
+  exportMode,
+  copyMode,
+  snapshotMode,
+}) => {
+  forEach(settings, setting => {
+    if (!exportMode) {
+      setting.exportRetention = undefined
+    }
+
+    if (!copyMode) {
+      setting.copyRetention = undefined
+    }
+
+    if (!snapshotMode) {
+      setting.snapshotRetention = undefined
+    }
+  })
+  return settings
+}
 
 const constructPattern = values =>
   values.length === 1
@@ -65,32 +101,6 @@ const destructVmsPattern = pattern =>
         vms: destructPattern(pattern),
       }
 
-const getNewSettings = schedules => {
-  const newSettings = {}
-
-  for (const id in schedules) {
-    newSettings[id] = {
-      exportRetention: schedules[id].exportRetention,
-      snapshotRetention: schedules[id].snapshotRetention,
-    }
-  }
-
-  return newSettings
-}
-
-const getNewSchedules = schedules => {
-  const newSchedules = {}
-
-  for (const id in schedules) {
-    newSchedules[id] = {
-      cron: schedules[id].cron,
-      timezone: schedules[id].timezone,
-    }
-  }
-
-  return newSchedules
-}
-
 const REPORT_WHEN_FILTER_OPTIONS = [
   {
     label: 'reportWhenAlways',
@@ -108,6 +118,11 @@ const REPORT_WHEN_FILTER_OPTIONS = [
 
 const getOptionRenderer = ({ label }) => <span>{_(label)}</span>
 
+const createDoesRetentionExist = name => {
+  const predicate = setting => setting[name] > 0
+  return ({ settings }) => some(settings, predicate)
+}
+
 const getInitialState = () => ({
   $pool: {},
   backupMode: false,
@@ -117,15 +132,16 @@ const getInitialState = () => ({
   deltaMode: false,
   drMode: false,
   editionMode: undefined,
-  formId: getRandomId(),
+  formId: generateRandomId(),
   name: '',
-  newSchedules: {},
+  offlineSnapshot: false,
   paramsUpdated: false,
   powerState: 'All',
   remotes: [],
   reportWhen: 'failure',
-  schedules: [],
+  schedules: {},
   settings: {},
+  showErrors: false,
   smartMode: false,
   snapshotMode: false,
   srs: [],
@@ -150,16 +166,32 @@ export default [
     initialState: getInitialState,
     effects: {
       createJob: () => async state => {
+        if (state.isJobInvalid) {
+          return {
+            ...state,
+            showErrors: true,
+          }
+        }
+
         await createBackupNgJob({
           name: state.name,
           mode: state.isDelta ? 'delta' : 'full',
           compression: state.compression ? 'native' : '',
-          schedules: getNewSchedules(state.newSchedules),
+          schedules: mapValues(
+            state.schedules,
+            ({ id, ...schedule }) => schedule
+          ),
           settings: {
-            ...getNewSettings(state.newSchedules),
+            ...normalizeSettings({
+              settings: cloneDeep(state.settings),
+              exportMode: state.exportMode,
+              copyMode: state.copyMode,
+              snapshotMode: state.snapshotMode,
+            }),
             '': {
               reportWhen: state.reportWhen,
-              concurrency: state.concurrency || undefined,
+              concurrency: state.concurrency,
+              offlineSnapshot: state.offlineSnapshot,
             },
           },
           remotes:
@@ -176,71 +208,56 @@ export default [
         })
       },
       editJob: () => async (state, props) => {
-        const newSettings = {}
-        if (!isEmpty(state.newSchedules)) {
-          await Promise.all(
-            map(state.newSchedules, async schedule => {
-              const scheduleId = (await createSchedule(props.job.id, {
-                cron: schedule.cron,
-                timezone: schedule.timezone,
-              })).id
-              newSettings[scheduleId] = {
-                exportRetention: schedule.exportRetention,
-                snapshotRetention: schedule.snapshotRetention,
-              }
-            })
-          )
+        if (state.isJobInvalid) {
+          return {
+            ...state,
+            showErrors: true,
+          }
         }
 
         await Promise.all(
           map(props.schedules, oldSchedule => {
-            const scheduleId = oldSchedule.id
-            const newSchedule = find(state.schedules, { id: scheduleId })
-
-            if (
-              newSchedule !== undefined &&
-              newSchedule.cron === oldSchedule.cron &&
-              newSchedule.timezone === oldSchedule.timezone
-            ) {
-              return
-            }
+            const id = oldSchedule.id
+            const newSchedule = state.schedules[id]
 
             if (newSchedule === undefined) {
-              return deleteSchedule(scheduleId)
+              return deleteSchedule(id)
             }
 
-            return editSchedule({
-              id: scheduleId,
-              jobId: props.job.id,
-              cron: newSchedule.cron,
-              timezone: newSchedule.timezone,
-            })
+            if (
+              newSchedule.cron !== oldSchedule.cron ||
+              newSchedule.timezone !== oldSchedule.timezone
+            ) {
+              return editSchedule({
+                id,
+                cron: newSchedule.cron,
+                timezone: newSchedule.timezone,
+              })
+            }
           })
         )
 
-        const oldSettings = props.job.settings
-        const settings = state.settings
-        if (!('' in oldSettings)) {
-          oldSettings[''] = {}
-        }
-        for (const id in oldSettings) {
-          const oldSetting = oldSettings[id]
-          const newSetting = settings[id]
+        const settings = cloneDeep(state.settings)
+        await Promise.all(
+          map(state.schedules, async schedule => {
+            const tmpId = schedule.id
+            if (props.schedules[tmpId] === undefined) {
+              const { id } = await createSchedule(props.job.id, {
+                cron: schedule.cron,
+                timezone: schedule.timezone,
+              })
 
-          if (id === '') {
-            oldSetting.reportWhen = state.reportWhen
-            oldSetting.concurrency = state.concurrency || undefined
-          } else if (!(id in settings)) {
-            delete oldSettings[id]
-          } else if (
-            oldSetting.snapshotRetention !== newSetting.snapshotRetention ||
-            oldSetting.exportRetention !== newSetting.exportRetention
-          ) {
-            newSettings[id] = {
-              exportRetention: newSetting.exportRetention,
-              snapshotRetention: newSetting.snapshotRetention,
+              settings[id] = settings[tmpId]
+              delete settings[tmpId]
             }
-          }
+          })
+        )
+
+        settings[''] = {
+          ...props.job.settings[''],
+          reportWhen: state.reportWhen,
+          concurrency: state.concurrency,
+          offlineSnapshot: state.offlineSnapshot,
         }
 
         await editBackupNgJob({
@@ -248,10 +265,12 @@ export default [
           name: state.name,
           mode: state.isDelta ? 'delta' : 'full',
           compression: state.compression ? 'native' : '',
-          settings: {
-            ...oldSettings,
-            ...newSettings,
-          },
+          settings: normalizeSettings({
+            settings,
+            exportMode: state.exportMode,
+            copyMode: state.copyMode,
+            snapshotMode: state.snapshotMode,
+          }),
           remotes:
             state.deltaMode || state.backupMode
               ? constructPattern(state.remotes)
@@ -269,9 +288,19 @@ export default [
         ...state,
         [mode]: !state[mode],
       }),
-      setCompression: (_, { target: { checked } }) => state => ({
+      setCheckboxValue: (_, { target: { checked, name } }) => state => ({
         ...state,
-        compression: checked,
+        [name]: checked,
+      }),
+      toggleScheduleState: (_, id) => state => ({
+        ...state,
+        schedules: {
+          ...state.schedules,
+          [id]: {
+            ...state.schedules[id],
+            enabled: !state.schedules[id].enabled,
+          },
+        },
       }),
       toggleSmartMode: (_, smartMode) => state => ({
         ...state,
@@ -312,9 +341,16 @@ export default [
         const remotes =
           job.remotes !== undefined ? destructPattern(job.remotes) : []
         const srs = job.srs !== undefined ? destructPattern(job.srs) : []
-        const globalSettings = job.settings['']
-        const settings = { ...job.settings }
+        const { concurrency, reportWhen, offlineSnapshot } =
+          job.settings[''] || {}
+        const settings = cloneDeep(job.settings)
         delete settings['']
+        const drMode = job.mode === 'full' && !isEmpty(srs)
+        const crMode = job.mode === 'delta' && !isEmpty(srs)
+
+        if (drMode || crMode) {
+          normalizeCopyRetention(settings)
+        }
 
         return {
           ...state,
@@ -328,12 +364,13 @@ export default [
           ),
           backupMode: job.mode === 'full' && !isEmpty(remotes),
           deltaMode: job.mode === 'delta' && !isEmpty(remotes),
-          drMode: job.mode === 'full' && !isEmpty(srs),
-          crMode: job.mode === 'delta' && !isEmpty(srs),
+          drMode,
+          crMode,
           remotes,
           srs,
-          reportWhen: get(globalSettings, 'reportWhen') || 'failure',
-          concurrency: get(globalSettings, 'concurrency') || 0,
+          reportWhen: reportWhen || 'failure',
+          concurrency: concurrency || 0,
+          offlineSnapshot,
           settings,
           schedules,
           ...destructVmsPattern(job.vms),
@@ -348,64 +385,48 @@ export default [
         tmpSchedule: {},
         editionMode: undefined,
       }),
-      editSchedule: (_, schedule) => state => {
-        const { snapshotRetention, exportRetention } =
-          state.settings[schedule.id] || {}
-        return {
-          ...state,
-          editionMode: 'editSchedule',
-          tmpSchedule: {
-            exportRetention,
-            snapshotRetention,
-            ...schedule,
-          },
-        }
-      },
-      deleteSchedule: (_, id) => async (state, props) => {
-        const schedules = [...state.schedules]
-        schedules.splice(findKey(state.schedules, { id }), 1)
-
-        return {
-          ...state,
-          schedules,
-        }
-      },
-      editNewSchedule: (_, schedule) => state => ({
+      editSchedule: (_, schedule) => state => ({
         ...state,
-        editionMode: 'editNewSchedule',
+        editionMode: 'editSchedule',
         tmpSchedule: {
           ...schedule,
         },
       }),
-      deleteNewSchedule: (_, id) => async (state, props) => {
-        const newSchedules = { ...state.newSchedules }
-        delete newSchedules[id]
+      deleteSchedule: (_, schedule) => state => {
+        const id = resolveId(schedule)
+        const schedules = { ...state.schedules }
+        const settings = { ...state.settings }
+
+        delete schedules[id]
+        delete settings[id]
         return {
           ...state,
-          newSchedules,
+          schedules,
+          settings,
         }
       },
       saveSchedule: (
         _,
-        { cron, timezone, exportRetention, snapshotRetention }
+        { cron, timezone, exportRetention, copyRetention, snapshotRetention }
       ) => async (state, props) => {
-        if (!state.exportMode) {
-          exportRetention = 0
-        }
-        if (!state.snapshotMode) {
-          snapshotRetention = 0
-        }
-
         if (state.editionMode === 'creation') {
+          const id = generateRandomId()
           return {
             ...state,
             editionMode: undefined,
-            newSchedules: {
-              ...state.newSchedules,
-              [getRandomId()]: {
+            schedules: {
+              ...state.schedules,
+              [id]: {
+                id,
                 cron,
                 timezone,
+              },
+            },
+            settings: {
+              ...state.settings,
+              [id]: {
                 exportRetention,
+                copyRetention,
                 snapshotRetention,
               },
             },
@@ -413,43 +434,27 @@ export default [
         }
 
         const id = state.tmpSchedule.id
-        if (state.editionMode === 'editSchedule') {
-          const scheduleKey = findKey(state.schedules, { id })
-          const schedules = [...state.schedules]
-          schedules[scheduleKey] = {
-            ...schedules[scheduleKey],
-            cron,
-            timezone,
-          }
+        const schedules = { ...state.schedules }
+        const settings = { ...state.settings }
 
-          const settings = { ...state.settings }
-          settings[id] = {
-            exportRetention,
-            snapshotRetention,
-          }
-
-          return {
-            ...state,
-            editionMode: undefined,
-            schedules,
-            settings,
-            tmpSchedule: {},
-          }
+        schedules[id] = {
+          ...schedules[id],
+          cron,
+          timezone,
+        }
+        settings[id] = {
+          ...settings[id],
+          exportRetention,
+          copyRetention,
+          snapshotRetention,
         }
 
         return {
           ...state,
           editionMode: undefined,
+          schedules,
+          settings,
           tmpSchedule: {},
-          newSchedules: {
-            ...state.newSchedules,
-            [id]: {
-              cron,
-              timezone,
-              exportRetention,
-              snapshotRetention,
-            },
-          },
         }
       },
       setPowerState: (_, powerState) => state => ({
@@ -504,36 +509,46 @@ export default [
       needUpdateParams: (state, { job, schedules }) =>
         job !== undefined && schedules !== undefined && !state.paramsUpdated,
       isJobInvalid: state =>
-        state.name.trim() === '' ||
-        (isEmpty(state.schedules) && isEmpty(state.newSchedules)) ||
-        (isEmpty(state.vms) && !state.smartMode) ||
-        ((state.backupMode || state.deltaMode) && isEmpty(state.remotes)) ||
-        ((state.drMode || state.crMode) && isEmpty(state.srs)) ||
-        (state.exportMode && !state.exportRetentionExists) ||
-        (state.snapshotMode && !state.snapshotRetentionExists) ||
-        (!state.isDelta && !state.isFull && !state.snapshotMode),
-      showCompression: state => state.isFull && state.exportRetentionExists,
-      exportMode: state =>
-        state.backupMode || state.deltaMode || state.drMode || state.crMode,
-      exportRetentionExists: ({ newSchedules, settings }) =>
-        some(
-          { ...newSchedules, ...settings },
-          ({ exportRetention }) => exportRetention !== 0
-        ),
-      snapshotRetentionExists: ({ newSchedules, settings }) =>
-        some(
-          { ...newSchedules, ...settings },
-          ({ snapshotRetention }) => snapshotRetention !== 0
-        ),
+        state.missingName ||
+        state.missingVms ||
+        state.missingBackupMode ||
+        state.missingSchedules ||
+        state.missingRemotes ||
+        state.missingSrs ||
+        state.missingExportRetention ||
+        state.missingCopyRetention ||
+        state.missingSnapshotRetention,
+      missingName: state => state.name.trim() === '',
+      missingVms: state => isEmpty(state.vms) && !state.smartMode,
+      missingBackupMode: state =>
+        !state.isDelta && !state.isFull && !state.snapshotMode,
+      missingRemotes: state =>
+        (state.backupMode || state.deltaMode) && isEmpty(state.remotes),
+      missingSrs: state => (state.drMode || state.crMode) && isEmpty(state.srs),
+      missingSchedules: state => isEmpty(state.schedules),
+      missingExportRetention: state =>
+        state.exportMode && !state.exportRetentionExists,
+      missingCopyRetention: state =>
+        state.copyMode && !state.copyRetentionExists,
+      missingSnapshotRetention: state =>
+        state.snapshotMode && !state.snapshotRetentionExists,
+      showCompression: state =>
+        state.isFull &&
+        (state.exportRetentionExists || state.copyRetentionExists),
+      exportMode: state => state.backupMode || state.deltaMode,
+      copyMode: state => state.drMode || state.crMode,
+      exportRetentionExists: createDoesRetentionExist('exportRetention'),
+      copyRetentionExists: createDoesRetentionExist('copyRetention'),
+      snapshotRetentionExists: createDoesRetentionExist('snapshotRetention'),
       isDelta: state => state.deltaMode || state.crMode,
       isFull: state => state.backupMode || state.drMode,
       vmsSmartPattern: ({ $pool, powerState, tags }) => ({
         $pool: constructSmartPattern($pool, resolveIds),
         power_state: powerState === 'All' ? undefined : powerState,
-        tags: constructSmartPattern(tags, normaliseTagValues),
+        tags: constructSmartPattern(tags, normalizeTagValues),
         type: 'VM',
       }),
-      srPredicate: ({ srs }) => ({ id }) => !includes(srs, id),
+      srPredicate: ({ srs }) => sr => isSrWritable(sr) && !includes(srs, sr.id),
       remotePredicate: ({ remotes }) => ({ id }) => !includes(remotes, id),
     },
   }),
@@ -550,7 +565,7 @@ export default [
             <Col mediumSize={6}>
               <Card>
                 <CardHeader>
-                  {_('backupName')}
+                  {_('backupName')}*
                   <Tooltip content={_('smartBackupModeTitle')}>
                     <Toggle
                       className='pull-right'
@@ -565,7 +580,13 @@ export default [
                     <label>
                       <strong>{_('backupName')}</strong>
                     </label>
-                    <Input onChange={effects.setName} value={state.name} />
+                    <FormFeedback
+                      component={Input}
+                      message={_('missingBackupName')}
+                      onChange={effects.setName}
+                      error={state.showErrors ? state.missingName : undefined}
+                      value={state.name}
+                    />
                   </FormGroup>
                   {state.smartMode ? (
                     <Upgrade place='newBackup' required={3}>
@@ -576,9 +597,12 @@ export default [
                       <label>
                         <strong>{_('vmsToBackup')}</strong>
                       </label>
-                      <SelectVm
+                      <FormFeedback
+                        component={SelectVm}
+                        message={_('missingVms')}
                         multi
                         onChange={effects.setVms}
+                        error={state.showErrors ? state.missingVms : undefined}
                         value={state.vms}
                       />
                     </FormGroup>
@@ -586,16 +610,21 @@ export default [
                   {state.showCompression && (
                     <label>
                       <input
-                        type='checkbox'
-                        onChange={effects.setCompression}
                         checked={state.compression}
+                        name='compression'
+                        onChange={effects.setCheckboxValue}
+                        type='checkbox'
                       />{' '}
                       <strong>{_('useCompression')}</strong>
                     </label>
                   )}
                 </CardBlock>
               </Card>
-              <Card>
+              <FormFeedback
+                component={Card}
+                error={state.showErrors ? state.missingBackupMode : undefined}
+                message={_('missingBackupMode')}
+              >
                 <CardBlock>
                   <div className='text-xs-center'>
                     <ActionButton
@@ -663,7 +692,8 @@ export default [
                     )}
                   </div>
                 </CardBlock>
-              </Card>
+              </FormFeedback>
+              <br />
               {(state.backupMode || state.deltaMode) && (
                 <Card>
                   <CardHeader>
@@ -674,9 +704,14 @@ export default [
                       <label>
                         <strong>{_('backupTargetRemotes')}</strong>
                       </label>
-                      <SelectRemote
+                      <FormFeedback
+                        component={SelectRemote}
+                        message={_('missingRemotes')}
                         onChange={effects.addRemote}
                         predicate={state.remotePredicate}
+                        error={
+                          state.showErrors ? state.missingRemotes : undefined
+                        }
                         value={null}
                       />
                       <br />
@@ -717,9 +752,12 @@ export default [
                       <label>
                         <strong>{_('backupTargetSrs')}</strong>
                       </label>
-                      <SelectSr
+                      <FormFeedback
+                        component={SelectSr}
+                        message={_('missingSrs')}
                         onChange={effects.addSr}
                         predicate={state.srPredicate}
+                        error={state.showErrors ? state.missingSrs : undefined}
                         value={null}
                       />
                       <br />
@@ -768,6 +806,17 @@ export default [
                       value={state.concurrency}
                     />
                   </FormGroup>
+                  <FormGroup>
+                    <label>
+                      <strong>{_('offlineSnapshot')}</strong>{' '}
+                      <input
+                        checked={state.offlineSnapshot}
+                        name='offlineSnapshot'
+                        onChange={effects.setCheckboxValue}
+                        type='checkbox'
+                      />
+                    </label>
+                  </FormGroup>
                 </CardBlock>
               </Card>
             </Col>
@@ -781,11 +830,12 @@ export default [
                 {state.paramsUpdated ? (
                   <ActionButton
                     btnStyle='primary'
-                    disabled={state.isJobInvalid}
                     form={state.formId}
                     handler={effects.editJob}
                     icon='save'
-                    redirectOnSuccess='/backup-ng'
+                    redirectOnSuccess={
+                      state.isJobInvalid ? undefined : '/backup-ng'
+                    }
                     size='large'
                   >
                     {_('formSave')}
@@ -793,11 +843,12 @@ export default [
                 ) : (
                   <ActionButton
                     btnStyle='primary'
-                    disabled={state.isJobInvalid}
                     form={state.formId}
                     handler={effects.createJob}
                     icon='save'
-                    redirectOnSuccess='/backup-ng'
+                    redirectOnSuccess={
+                      state.isJobInvalid ? undefined : '/backup-ng'
+                    }
                     size='large'
                   >
                     {_('formCreate')}

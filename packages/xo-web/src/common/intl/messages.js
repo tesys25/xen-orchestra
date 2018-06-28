@@ -71,6 +71,7 @@ const messages = {
   settingsAclsPage: 'ACLs',
   settingsPluginsPage: 'Plugins',
   settingsLogsPage: 'Logs',
+  settingsCloudConfigsPage: 'Cloud configs',
   settingsIpsPage: 'IPs',
   settingsConfigPage: 'Config',
   aboutPage: 'About',
@@ -83,6 +84,10 @@ const messages = {
   newServerPage: 'Server',
   newImport: 'Import',
   xosan: 'XOSAN',
+  backupDeprecatedMessage:
+    'Warning: Backup is deprecated, use Backup NG instead.',
+  backupMigrationLink: 'How to migrate to Backup NG',
+  backupNgNewPage: 'Create a new backup with Backup NG',
   backupOverviewPage: 'Overview',
   backupNewPage: 'New',
   backupRemotesPage: 'Remotes',
@@ -185,9 +190,17 @@ const messages = {
   sortedTableNumberOfSelectedItems: '{nSelected, number} selected',
   sortedTableSelectAllItems: 'Click here to select all items',
 
+  // ----- state -----
+  state: 'State',
+  stateDisabled: 'Disabled',
+  stateEnabled: 'Enabled',
+
   // ----- Forms -----
   formCancel: 'Cancel',
   formCreate: 'Create',
+  formEdit: 'Edit',
+  formId: 'ID',
+  formName: 'Name',
   formReset: 'Reset',
   formSave: 'Save',
   add: 'Add',
@@ -222,9 +235,10 @@ const messages = {
   selectIp: 'Select IP(s)…',
   selectIpPool: 'Select IP pool(s)…',
   selectVgpuType: 'Select VGPU type(s)…',
-  fillRequiredInformations: 'Fill required informations.',
-  fillOptionalInformations: 'Fill informations (optional)',
+  fillRequiredInformations: 'Fill required information.',
+  fillOptionalInformations: 'Fill information (optional)',
   selectTableReset: 'Reset',
+  selectCloudConfigs: 'Select Cloud Config(s)…',
 
   // --- Dates/Scheduler ---
 
@@ -261,6 +275,7 @@ const messages = {
   jobTransferredDataSpeed: 'Transfer speed:',
   operationSize: 'Size',
   operationSpeed: 'Speed',
+  exportType: 'Type',
   jobMergedDataSize: 'Merge size:',
   jobMergedDataSpeed: 'Merge speed:',
   allJobCalls: 'All',
@@ -278,12 +293,10 @@ const messages = {
   jobAction: 'Action',
   jobTag: 'Tag',
   jobScheduling: 'Scheduling',
-  jobState: 'State',
-  jobStateEnabled: 'Enabled',
-  jobStateDisabled: 'Disabled',
   jobTimezone: 'Timezone',
   jobServerTimezone: 'Server',
   runJob: 'Run job',
+  cancelJob: 'Cancel job',
   runJobConfirm: 'Are you sure you want to run {backupType} {id} ({tag})?',
   runJobVerbose: 'One shot running started. See overview for logs.',
   jobEdit: 'Edit job',
@@ -320,11 +333,25 @@ const messages = {
   jobEditMessage:
     'You are editing job {name} ({id}). Saving will override previous job state.',
   scheduleEdit: 'Edit schedule',
+  missingBackupName: "A name is required to create the backup's job!",
+  missingVms: 'Missing VMs!',
+  missingBackupMode: 'You need to choose a backup mode!',
+  missingRemotes: 'Missing remotes!',
+  missingSrs: 'Missing SRs!',
+  missingSchedules: 'Missing schedules!',
+  missingExportRetention:
+    'The Backup mode and The Delta Backup mode require export retention to be higher than 0!',
+  missingCopyRetention:
+    'The CR mode and The DR mode require copy retention to be higher than 0!',
+  missingSnapshotRetention:
+    'The Rolling Snapshot mode requires snapshot retention to be higher than 0!',
+  retentionNeeded: 'One of the retentions needs to be higher than 0!',
   scheduleAdd: 'Add a schedule',
   scheduleDelete: 'Delete',
   scheduleRun: 'Run schedule',
   deleteSelectedSchedules: 'Delete selected schedules',
   noScheduledJobs: 'No scheduled jobs.',
+  legacySnapshotsLink: 'You can delete all your legacy backup snapshots.',
   newSchedule: 'New schedule',
   noJobs: 'No jobs found.',
   noSchedules: 'No schedules found',
@@ -338,6 +365,7 @@ const messages = {
   jobUserNotFound: "This job's creator no longer exists",
   backupUserNotFound: "This backup's creator no longer exists",
   redirectToMatchingVms: 'Click here to see the matching VMs',
+  migrateToBackupNg: 'Migrate to backup NG',
   noMatchingVms: 'There are no matching VMs!',
   allMatchingVms: '{icon} See the matching VMs ({nMatchingVms, number})',
   backupOwner: 'Backup owner',
@@ -345,6 +373,7 @@ const messages = {
   migrateBackupScheduleMessage:
     'This will migrate this backup to a backup NG. This operation is not reversible. Do you want to continue?',
   runBackupNgJobConfirm: 'Are you sure you want to run {name} ({id})?',
+  cancelJobConfirm: 'Are you sure you want to cancel {name} ({id})?',
 
   // ------ New backup -----
   newBackupAdvancedSettings: 'Advanced settings',
@@ -358,10 +387,12 @@ const messages = {
   normalBackup: 'Normal backup',
   smartBackup: 'Smart backup',
   exportRetention: 'Export retention',
+  copyRetention: 'Copy retention',
   snapshotRetention: 'Snapshot retention',
   backupName: 'Name',
   useDelta: 'Use delta',
   useCompression: 'Use compression',
+  offlineSnapshot: 'Offline snapshot',
   dbAndDrRequireEntreprisePlan: 'Delta Backup and DR require Entreprise plan',
   crRequiresPremiumPlan: 'CR requires Premium plan',
   smartBackupModeTitle: 'Smart mode',
@@ -794,10 +825,6 @@ const messages = {
   powerStateSuspended: 'suspended',
 
   // ----- VM home -----
-  vmStatus: 'No Xen tools detected',
-  vmName: 'No IPv4 record',
-  vmDescription: 'No IP record',
-  vmSettings: 'Started {ago}',
   vmCurrentStatus: 'Current status:',
   vmNotRunning: 'Not running',
   vmHaltedSince: 'Halted {ago}',
@@ -1084,6 +1111,8 @@ const messages = {
   vmContainer: 'Resident on',
   vmSnapshotsRelatedToNonExistentBackups:
     'VM snapshots related to non-existent backups',
+  snapshotOf: 'Snapshot of',
+  legacySnapshots: 'Legacy backups snapshots',
   alarmMessage: 'Alarms',
   noAlarms: 'No alarms',
   alarmDate: 'Date',
@@ -1124,7 +1153,7 @@ const messages = {
   newVmReset: 'Reset',
   newVmSelectTemplate: 'Select template',
   newVmSshKey: 'SSH key',
-  newVmConfigDrive: 'Config drive',
+  noConfigDrive: 'No config drive',
   newVmCustomConfig: 'Custom config',
   availableTemplateVarsInfo:
     'Click here to see the available template variables',
@@ -1216,7 +1245,7 @@ const messages = {
   noVmImportErrorDescription: 'No description available',
   vmImportError: 'Error:',
   vmImportFileType: '{type} file:',
-  vmImportConfigAlert: 'Please to check and/or modify the VM configuration.',
+  vmImportConfigAlert: 'Please check and/or modify the VM configuration.',
 
   // ---- Tasks ---
   noTasks: 'No pending tasks',
@@ -1231,12 +1260,11 @@ const messages = {
 
   // ---- Backup views ---
   backupSchedules: 'Schedules',
-  backupSavedSchedules: 'Saved schedules',
-  backupNewSchedules: 'New schedules',
   scheduleCron: 'Cron pattern',
   scheduleName: 'Name',
   scheduleTimezone: 'Timezone',
   scheduleExportRetention: 'Export ret.',
+  scheduleCopyRetention: 'Copy ret.',
   scheduleSnapshotRetention: 'Snapshot ret.',
   getRemote: 'Get remote',
   listRemote: 'List Remote',
@@ -1745,6 +1773,16 @@ const messages = {
   settingsAclsButtonTooltippool: 'Pool',
   settingsAclsButtonTooltipSR: 'SR',
   settingsAclsButtonTooltipnetwork: 'Network',
+
+  // ----- Settings/Cloud configs -----
+  settingsCloudConfigTemplate: 'Template',
+  confirmDeleteCloudConfigsTitle:
+    'Delete cloud config{nCloudConfigs, plural, one {} other {s}}',
+  confirmDeleteCloudConfigsBody:
+    'Are you sure you want to delete {nCloudConfigs, number} cloud config{nCloudConfigs, plural, one {} other {s}}?',
+  deleteCloudConfig: 'Delete cloud config',
+  editCloudConfig: 'Edit cloud config',
+  deleteSelectedCloudConfigs: 'Delete selected cloud configs',
 
   // ----- Config -----
   noConfigFile: 'No config file selected',

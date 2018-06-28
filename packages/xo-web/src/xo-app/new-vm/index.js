@@ -13,7 +13,10 @@ import store from 'store'
 import Tags from 'tags'
 import Tooltip from 'tooltip'
 import Wizard, { Section } from 'wizard'
-import { alert } from 'modal'
+import {
+  AvailableTemplateVars,
+  DEFAULT_CLOUD_CONFIG_TEMPLATE,
+} from 'cloud-config'
 import { Container, Row, Col } from 'grid'
 import { injectIntl } from 'react-intl'
 import {
@@ -43,12 +46,12 @@ import {
   getCloudInitConfig,
   subscribeCurrentUser,
   subscribeIpPools,
-  subscribePermissions,
   subscribeResourceSets,
   XEN_DEFAULT_CPU_CAP,
   XEN_DEFAULT_CPU_WEIGHT,
 } from 'xo'
 import {
+  SelectCloudConfig,
   SelectHost,
   SelectIp,
   SelectNetwork,
@@ -89,32 +92,6 @@ import styles from './index.css'
 
 const NB_VMS_MIN = 2
 const NB_VMS_MAX = 100
-
-const AVAILABLE_TEMPLATE_VARS = {
-  '{name}': 'templateNameInfo',
-  '%': 'templateIndexInfo',
-}
-
-const showAvailableTemplateVars = () =>
-  alert(
-    _('availableTemplateVarsTitle'),
-    <ul>
-      {map(AVAILABLE_TEMPLATE_VARS, (value, key) => (
-        <li key={key}>{_.keyValue(key, _(value))}</li>
-      ))}
-    </ul>
-  )
-
-const AvailableTemplateVarsInfo = () => (
-  <Tooltip content={_('availableTemplateVarsInfo')}>
-    <a
-      className={classNames('text-info', styles.availableTemplateVars)}
-      onClick={showAvailableTemplateVars}
-    >
-      <Icon icon='info' />
-    </a>
-  </Tooltip>
-)
 
 /* eslint-disable camelcase */
 
@@ -192,6 +169,7 @@ class Vif extends BaseComponent {
             ) : (
               <SelectResourceSetsNetwork
                 onChange={onChangeNetwork}
+                predicate={networkPredicate}
                 resourceSet={resourceSet}
                 value={vif.network}
               />
@@ -234,7 +212,6 @@ class Vif extends BaseComponent {
 
 @addSubscriptions({
   resourceSets: subscribeResourceSets,
-  permissions: subscribePermissions,
   user: subscribeCurrentUser,
 })
 @connectStore(() => ({
@@ -314,12 +291,12 @@ export default class NewVm extends BaseComponent {
   _reset = () => {
     this._replaceState({
       bootAfterCreate: true,
-      configDrive: false,
       CPUs: '',
       cpuCap: '',
       cpuWeight: '',
       existingDisks: {},
       fastClone: true,
+      installMethod: 'noConfigDrive',
       multipleVms: false,
       name_label: '',
       name_description: '',
@@ -363,7 +340,7 @@ export default class NewVm extends BaseComponent {
 
     let cloudConfig
     let cloudConfigs
-    if (state.configDrive) {
+    if (state.installMethod !== 'noConfigDrive') {
       const hostname = state.name_label
         .replace(/^\s+|\s+$/g, '')
         .replace(/\s+/g, '-')
@@ -377,7 +354,9 @@ export default class NewVm extends BaseComponent {
           ''
         )}`
       } else {
-        const replacer = this._buildTemplate(state.customConfig)
+        const replacer = this._buildTemplate(
+          defined(state.customConfig, DEFAULT_CLOUD_CONFIG_TEMPLATE)
+        )
         cloudConfig = replacer(this.state.state, 0)
         if (state.multipleVms) {
           const seqStart = state.seqStart
@@ -487,13 +466,12 @@ export default class NewVm extends BaseComponent {
         network:
           pool || isInResourceSet(vif.$network)
             ? vif.$network
-            : resourceSet.objectsByType['network'][0].id,
+            : this._getDefaultNetworkId(template),
       })
     })
     if (VIFs.length === 0) {
-      const networkId = this._getDefaultNetworkId()
       VIFs.push({
-        network: networkId,
+        network: this._getDefaultNetworkId(template),
       })
     }
     const name_label =
@@ -521,10 +499,8 @@ export default class NewVm extends BaseComponent {
       // installation
       installMethod:
         (template.install_methods != null && template.install_methods[0]) ||
-        'SSH',
+        'noConfigDrive',
       sshKeys: this.props.userSshKeys && this.props.userSshKeys.length && [0],
-      customConfig:
-        '#cloud-config\n#hostname: {name}%\n#ssh_authorized_keys:\n#  - ssh-rsa <myKey>\n#packages:\n#  - htop\n',
       // interfaces
       VIFs,
       // disks
@@ -586,8 +562,12 @@ export default class NewVm extends BaseComponent {
   _getNetworkPredicate = createSelector(
     this._getIsInPool,
     this._getIsInResourceSet,
-    (isInPool, isInResourceSet) => network =>
-      isInResourceSet(network.id) || isInPool(network)
+    () => this.props.pool === undefined,
+    () => this.state.state.template,
+    (isInPool, isInResourceSet, self, template) => network =>
+      (self ? isInResourceSet(network.id) : isInPool(network)) &&
+      template !== undefined &&
+      template.$pool === network.$pool
   )
   _getPoolNetworks = createSelector(
     () => this.props.networks,
@@ -620,16 +600,20 @@ export default class NewVm extends BaseComponent {
         )
     }
   )
-  _getDefaultNetworkId = () => {
-    const resourceSet = this._getResolvedResourceSet()
-    if (resourceSet) {
-      const { network } = resourceSet.objectsByType
-      return !isEmpty(network) && network[0].id
+  _getDefaultNetworkId = template => {
+    if (template === undefined) {
+      return
     }
-    const network = find(this._getPoolNetworks(), network => {
-      const pif = getObject(store.getState(), network.PIFs[0])
-      return pif && pif.management
-    })
+
+    const network =
+      this.props.pool === undefined
+        ? find(this._getResolvedResourceSet().objectsByType.network, {
+            $pool: template.$pool,
+          })
+        : find(this._getPoolNetworks(), network => {
+            const pif = getObject(store.getState(), network.PIFs[0])
+            return pif && pif.management
+          })
     return network && network.id
   }
 
@@ -765,13 +749,13 @@ export default class NewVm extends BaseComponent {
     })
   }
   _addInterface = () => {
-    const networkId = this._getDefaultNetworkId()
+    const { state } = this.state
 
     this._setState({
       VIFs: [
-        ...this.state.state.VIFs,
+        ...state.VIFs,
         {
-          network: networkId,
+          network: this._getDefaultNetworkId(state.template),
         },
       ],
     })
@@ -1011,6 +995,12 @@ export default class NewVm extends BaseComponent {
 
   // INSTALL SETTINGS ------------------------------------------------------------
 
+  _onChangeCloudConfig = cloudConfig => {
+    this._setState({
+      customConfig: get(() => cloudConfig.template),
+    })
+  }
+
   _renderInstallSettings = () => {
     const { template } = this.state.state
     if (!template) {
@@ -1018,7 +1008,6 @@ export default class NewVm extends BaseComponent {
     }
     const {
       cloudConfig,
-      configDrive,
       customConfig,
       installIso,
       installMethod,
@@ -1037,36 +1026,36 @@ export default class NewVm extends BaseComponent {
         {this._isDiskTemplate ? (
           <SectionContent key='diskTemplate' column>
             <LineItem>
-              <div className={styles.configDrive}>
-                <span className={styles.configDriveToggle}>
-                  {_('newVmConfigDrive')}
-                </span>
+              <label>
+                <input
+                  checked={installMethod === 'noConfigDrive'}
+                  name='installMethod'
+                  onChange={this._linkState('installMethod')}
+                  type='radio'
+                  value='noConfigDrive'
+                />
                 &nbsp;
-                <span className={styles.configDriveToggle}>
-                  <Toggle
-                    value={configDrive}
-                    onChange={this._linkState('configDrive')}
-                  />
-                </span>
-              </div>
+                {_('noConfigDrive')}
+              </label>
             </LineItem>
+            <br />
             <LineItem>
-              <span>
+              <label>
                 <input
                   checked={installMethod === 'SSH'}
-                  disabled={!configDrive}
                   name='installMethod'
                   onChange={this._linkState('installMethod')}
                   type='radio'
                   value='SSH'
-                />{' '}
-                <span>{_('newVmSshKey')}</span>
-              </span>
+                />
+                &nbsp;
+                {_('newVmSshKey')}
+              </label>
               &nbsp;
               <span className={classNames('input-group', styles.fixedWidth)}>
                 <DebounceInput
                   className='form-control'
-                  disabled={!configDrive || installMethod !== 'SSH'}
+                  disabled={installMethod !== 'SSH'}
                   onChange={this._linkState('newSshKey')}
                   value={newSshKey}
                 />
@@ -1080,7 +1069,7 @@ export default class NewVm extends BaseComponent {
                 this.props.userSshKeys.length > 0 && (
                   <span className={styles.fixedWidth}>
                     <SelectSshKey
-                      disabled={!configDrive || installMethod !== 'SSH'}
+                      disabled={installMethod !== 'SSH'}
                       onChange={this._onChangeSshKeys}
                       multi
                       value={sshKeys || []}
@@ -1088,29 +1077,37 @@ export default class NewVm extends BaseComponent {
                   </span>
                 )}
             </LineItem>
+            <br />
             <LineItem>
-              <input
-                checked={installMethod === 'customConfig'}
-                disabled={!configDrive}
-                name='installMethod'
-                onChange={this._linkState('installMethod')}
-                type='radio'
-                value='customConfig'
-              />
-              &nbsp;
-              <span>
-                {_('newVmCustomConfig')}
+              <label>
+                <input
+                  checked={installMethod === 'customConfig'}
+                  name='installMethod'
+                  onChange={this._linkState('installMethod')}
+                  type='radio'
+                  value='customConfig'
+                />
                 &nbsp;
-                <AvailableTemplateVarsInfo />
-              </span>
+                {_('newVmCustomConfig')}
+              </label>
               &nbsp;
-              <DebounceTextarea
-                className={classNames('form-control', styles.customConfig)}
-                disabled={!configDrive || installMethod !== 'customConfig'}
-                onChange={this._linkState('customConfig')}
-                value={customConfig}
-              />
+              <AvailableTemplateVars />
+              &nbsp;
+              <span className={styles.inlineSelect}>
+                <SelectCloudConfig
+                  disabled={installMethod !== 'customConfig'}
+                  onChange={this._onChangeCloudConfig}
+                />
+              </span>
             </LineItem>
+            <br />
+            <DebounceTextarea
+              className='form-control'
+              disabled={installMethod !== 'customConfig'}
+              onChange={this._linkState('customConfig')}
+              rows={7}
+              value={defined(customConfig, DEFAULT_CLOUD_CONFIG_TEMPLATE)}
+            />
           </SectionContent>
         ) : (
           <SectionContent>
@@ -1206,7 +1203,6 @@ export default class NewVm extends BaseComponent {
   }
   _isInstallSettingsDone = () => {
     const {
-      configDrive,
       customConfig,
       installIso,
       installMethod,
@@ -1216,7 +1212,11 @@ export default class NewVm extends BaseComponent {
     } = this.state.state
     switch (installMethod) {
       case 'customConfig':
-        return customConfig || !configDrive
+        return (
+          customConfig === undefined ||
+          customConfig.trim() !== '' ||
+          installMethod === 'noConfigDrive'
+        )
       case 'ISO':
         return installIso
       case 'network':
@@ -1224,9 +1224,11 @@ export default class NewVm extends BaseComponent {
       case 'PXE':
         return true
       case 'SSH':
-        return !isEmpty(sshKeys) || !configDrive
+        return !isEmpty(sshKeys) || installMethod === 'noConfigDrive'
       default:
-        return template && this._isDiskTemplate && !configDrive
+        return (
+          template && this._isDiskTemplate && installMethod === 'noConfigDrive'
+        )
     }
   }
 
@@ -1277,7 +1279,7 @@ export default class NewVm extends BaseComponent {
 
   _renderDisks = () => {
     const {
-      state: { configDrive, existingDisks, VDIs },
+      state: { installMethod, existingDisks, VDIs },
     } = this.state
     const { pool } = this.props
     let i = 0
@@ -1340,7 +1342,7 @@ export default class NewVm extends BaseComponent {
                   <SizeInput
                     className={styles.sizeInput}
                     onChange={this._linkState(`existingDisks.${index}.size`)}
-                    readOnly={!configDrive}
+                    readOnly={installMethod === 'noConfigDrive'}
                     value={defined(disk.size, null)}
                   />
                 </Item>
@@ -1561,7 +1563,7 @@ export default class NewVm extends BaseComponent {
                 value={namePattern}
               />
               &nbsp;
-              <AvailableTemplateVarsInfo />
+              <AvailableTemplateVars />
             </Item>
             <Item label={_('newVmFirstIndex')}>
               <DebounceInput

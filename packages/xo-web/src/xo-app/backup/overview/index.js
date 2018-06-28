@@ -75,13 +75,13 @@ const JOB_COLUMNS = [
     sortCriteria: ({ schedule }) => schedule.timezone,
   },
   {
-    name: _('jobState'),
+    name: _('state'),
     itemRenderer: ({ schedule }) => (
       <StateButton
-        disabledLabel={_('jobStateDisabled')}
+        disabledLabel={_('stateDisabled')}
         disabledHandler={enableSchedule}
         disabledTooltip={_('logIndicationToEnable')}
-        enabledLabel={_('jobStateEnabled')}
+        enabledLabel={_('stateEnabled')}
         enabledHandler={disableSchedule}
         enabledTooltip={_('logIndicationToDisable')}
         handlerParam={schedule.id}
@@ -126,10 +126,11 @@ const JOB_COLUMNS = [
               icon='run-schedule'
             />
             <ActionRowButton
-              icon='migrate-job'
               btnStyle='danger'
               handler={migrateBackupSchedule}
               handlerParam={schedule.jobId}
+              icon='migrate-job'
+              tooltip={_('migrateToBackupNg')}
             />
             <ActionRowButton
               btnStyle='danger'
@@ -164,12 +165,12 @@ export default class Overview extends Component {
       jobs === undefined || schedules === undefined
         ? []
         : orderBy(
-          filter(schedules, schedule => {
-            const job = jobs[schedule.jobId]
-            return job && jobKeyToLabel[job.key]
-          }),
-          'id'
-        )
+            filter(schedules, schedule => {
+              const job = jobs[schedule.jobId]
+              return job && jobKeyToLabel[job.key]
+            }),
+            'id'
+          )
   )
 
   _redirectToMatchingVms = pattern => {
@@ -238,14 +239,28 @@ export default class Overview extends Component {
           <CardBlock>
             <NoObjects
               collection={schedules}
-              emptyMessage={_('noScheduledJobs')}
+              emptyMessage={
+                <span>
+                  {_('noScheduledJobs')}{' '}
+                  <Link to='/backup-ng/health'>{_('legacySnapshotsLink')}</Link>
+                </span>
+              }
             >
               {() => (
-                <SortedTable
-                  columns={JOB_COLUMNS}
-                  collection={this._getScheduleCollection()}
-                  userData={isScheduleUserMissing}
-                />
+                <div>
+                  <div className='alert alert-warning'>
+                    {_('backupDeprecatedMessage')}
+                    <br />
+                    <a href='https://xen-orchestra.com/blog/migrate-backup-to-backup-ng/'>
+                      {_('backupMigrationLink')}
+                    </a>
+                  </div>
+                  <SortedTable
+                    columns={JOB_COLUMNS}
+                    collection={this._getScheduleCollection()}
+                    userData={isScheduleUserMissing}
+                  />
+                </div>
               )}
             </NoObjects>
           </CardBlock>

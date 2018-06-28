@@ -167,7 +167,10 @@ class ColumnHead extends Component {
 })
 class Checkbox extends Component {
   componentDidUpdate () {
-    const { props: { indeterminate }, ref } = this
+    const {
+      props: { indeterminate },
+      ref,
+    } = this
     if (ref !== null) {
       ref.indeterminate = indeterminate
     }
@@ -195,7 +198,7 @@ const actionsShape = propTypes.arrayOf(
     disabled: propTypes.oneOfType([propTypes.bool, propTypes.func]),
     handler: propTypes.func.isRequired,
     icon: propTypes.string.isRequired,
-    label: propTypes.node.isRequired,
+    label: propTypes.oneOfType([propTypes.node, propTypes.func]).isRequired,
     level: propTypes.oneOf(['primary', 'warning', 'danger']),
     redirectOnSuccess: propTypes.oneOfType([propTypes.func, propTypes.string]),
   })
@@ -487,8 +490,8 @@ export default class SortedTable extends Component {
             ) {
               this.setState({
                 highlighted:
-                  (itemIndex + visibleItems.length + 1) % visibleItems.length ||
-                  0,
+                  (itemIndex + visibleItems.length + 1) %
+                  visibleItems.length || 0,
               })
             }
             break
@@ -500,8 +503,8 @@ export default class SortedTable extends Component {
             ) {
               this.setState({
                 highlighted:
-                  (itemIndex + visibleItems.length - 1) % visibleItems.length ||
-                  0,
+                  (itemIndex + visibleItems.length - 1) %
+                  visibleItems.length || 0,
               })
             }
             break
@@ -893,7 +896,7 @@ export default class SortedTable extends Component {
                     </span>
                   )
                 )}
-                {nSelectedItems !== 0 && (
+                {(nSelectedItems !== 0 || all) && (
                   <div className='pull-right'>
                     <ButtonGroup>
                       {map(groupedActions, (props, key) => (

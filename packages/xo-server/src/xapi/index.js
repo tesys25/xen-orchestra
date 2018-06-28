@@ -70,7 +70,7 @@ import {
 // ===================================================================
 
 const TAG_BASE_DELTA = 'xo:base_delta'
-const TAG_COPY_SRC = 'xo:copy_of'
+export const TAG_COPY_SRC = 'xo:copy_of'
 
 // ===================================================================
 
@@ -664,7 +664,7 @@ export default class Xapi extends XapiBase {
     }
 
     // ensure the vm record is up-to-date
-    vm = await this.barrier('VM', $ref)
+    vm = await this.barrier($ref)
 
     return Promise.all([
       forceDeleteDefaultTemplate &&
@@ -1083,7 +1083,7 @@ export default class Xapi extends XapiBase {
             .once('finish', () => {
               transferSize += sizeStream.size
             })
-          stream.task = sizeStream.task
+          sizeStream.task = stream.task
           await this._importVdiContent(vdi, sizeStream, VDI_FORMAT_VHD)
         }
       }),

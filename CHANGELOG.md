@@ -1,6 +1,52 @@
 # ChangeLog
 
-## **5.20.0** (planned 2018-05-31)
+## *next*
+
+### Enhancements
+
+### Bug fixes
+
+### Released packages
+
+- xo-server v5.22.0
+- xo-web v5.22.0
+
+## **5.21.0** (2018-06-28)
+
+### Enhancements
+
+- Hide legacy backup creation view [#2956](https://github.com/vatesfr/xen-orchestra/issues/2956)
+- [Delta Backup NG logs] Display wether the export is a full or a delta [#2711](https://github.com/vatesfr/xen-orchestra/issues/2711)
+- Copy VDIs' UUID from SR/disks view [#3051](https://github.com/vatesfr/xen-orchestra/issues/3051)
+- [Backup NG] New option to shutdown VMs before snapshotting them [#3058](https://github.com/vatesfr/xen-orchestra/issues/3058#event-1673756438)
+- [Backup NG form] Improve feedback [#2711](https://github.com/vatesfr/xen-orchestra/issues/2711)
+- [Backup NG] Different retentions for backup and replication [#2895](https://github.com/vatesfr/xen-orchestra/issues/2895)
+- Possibility to use a fast clone when creating a VM from a snapshot [#2937](https://github.com/vatesfr/xen-orchestra/issues/2937)
+- Ability to customize cloud config templates [#2984](https://github.com/vatesfr/xen-orchestra/issues/2984)
+- Add Backup deprecation message and link to Backup NG migration blog post [#3089](https://github.com/vatesfr/xen-orchestra/issues/3089)
+- [Backup NG] Ability to cancel a running backup job [#3047](https://github.com/vatesfr/xen-orchestra/issues/3047)
+- [Backup NG form] Ability to enable/disable a schedule [#3062](https://github.com/vatesfr/xen-orchestra/issues/3062)
+- New backup/health view with non-existent backup snapshots table [#3090](https://github.com/vatesfr/xen-orchestra/issues/3090)
+- Disable cancel/destroy tasks when not allowed [#3076](https://github.com/vatesfr/xen-orchestra/issues/3076)
+- Default remote type is NFS [#3103](https://github.com/vatesfr/xen-orchestra/issues/3103) (PR [#3114](https://github.com/vatesfr/xen-orchestra/pull/3114))
+- Add legacy backups snapshots to backup/health [#3082](https://github.com/vatesfr/xen-orchestra/issues/3082) (PR [#3111](https://github.com/vatesfr/xen-orchestra/pull/3111))
+- [Backup NG logs] Add the job's name to the modal's title [#2711](https://github.com/vatesfr/xen-orchestra/issues/2711) (PR [#3115](https://github.com/vatesfr/xen-orchestra/pull/3115))
+- Adding a XCP-ng host to a XS pool now fails fast [#3061](https://github.com/vatesfr/xen-orchestra/issues/3061) (PR [#3118](https://github.com/vatesfr/xen-orchestra/pull/3118))
+- [Backup NG logs] Ability to report a failed job and copy its log to the clipboard [#3100](https://github.com/vatesfr/xen-orchestra/issues/3100) (PR [#3110](https://github.com/vatesfr/xen-orchestra/pull/3110))
+
+### Bugs
+
+- update the xentools search item to return the version number of installed xentools [#3015](https://github.com/vatesfr/xen-orchestra/issues/3015)
+- Fix Nagios backup reports [#2991](https://github.com/vatesfr/xen-orchestra/issues/2991)
+- Fix the retry of a single failed/interrupted VM backup [#2912](https://github.com/vatesfr/xen-orchestra/issues/2912#issuecomment-395480321)
+- New VM with Self: filter out networks that are not in the template's pool [#3011](https://github.com/vatesfr/xen-orchestra/issues/3011)
+- [Backup NG] Auto-detect when a full export is necessary.
+- Fix Load Balancer [#3075](https://github.com/vatesfr/xen-orchestra/issues/3075#event-1685469551) [#3026](https://github.com/vatesfr/xen-orchestra/issues/3026)
+- [SR stats] Don't scale XAPI iowait values [#2969](https://github.com/vatesfr/xen-orchestra/issues/2969)
+- [Backup NG] Don't list unusable SRs for CR/DR [#3050](https://github.com/vatesfr/xen-orchestra/issues/3050)
+- Fix creating VM from snapshot (PR [3117](https://github.com/vatesfr/xen-orchestra/pull/3117))
+
+## **5.20.0** (2018-05-31)
 
 ### Enhancements
 
@@ -8,8 +54,6 @@
 - Create new VDI from SR view not attached to any VM [#2229](https://github.com/vatesfr/xen-orchestra/issues/2229)
 - [Patches] ignore XS upgrade in missing patches counter [#2866](https://github.com/vatesfr/xen-orchestra/issues/2866)
 - [Health] List VM snapshots related to non-existing backup jobs/schedules [#2828](https://github.com/vatesfr/xen-orchestra/issues/2828)
-
-### Bugs
 
 ## **5.19.0** (2018-05-01)
 

@@ -232,6 +232,11 @@ export default class Menu extends Component {
             icon: 'menu-backup-file-restore',
             label: 'backupFileRestorePage',
           },
+          {
+            to: '/backup-ng/health',
+            icon: 'menu-dashboard-health',
+            label: 'overviewHealthDashboardPage',
+          },
         ],
       },
       isAdmin && {
@@ -285,6 +290,11 @@ export default class Menu extends Component {
             label: 'settingsLogsPage',
           },
           { to: '/settings/ips', icon: 'ip', label: 'settingsIpsPage' },
+          {
+            to: '/settings/cloud-configs',
+            icon: 'template',
+            label: 'settingsCloudConfigsPage',
+          },
           {
             to: '/settings/config',
             icon: 'menu-settings-config',

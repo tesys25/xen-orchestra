@@ -25,8 +25,10 @@ function checkPermissionOnSrs (vm, permission = 'operate') {
     if (vbd.is_cd_drive || !vdiId) {
       return
     }
-
-    return permissions.push([this.getObject(vdiId, 'VDI').$SR, permission])
+    return permissions.push([
+      this.getObject(vdiId, ['VDI', 'VDI-snapshot']).$SR,
+      permission,
+    ])
   })
 
   return this.hasPermissions(this.session.get('user_id'), permissions).then(
@@ -661,8 +663,7 @@ clone.params = {
 }
 
 clone.resolve = {
-  // TODO: is it necessary for snapshots?
-  vm: ['id', 'VM', 'administrate'],
+  vm: ['id', ['VM', 'VM-snapshot'], 'administrate'],
 }
 
 // -------------------------------------------------------------------
@@ -1017,13 +1018,12 @@ export async function stop ({ vm, force }) {
 
   // Hard shutdown
   if (force) {
-    await xapi.call('VM.hard_shutdown', vm._xapiRef)
-    return
+    return xapi.shutdownVm(vm._xapiRef, { hard: true })
   }
 
   // Clean shutdown
   try {
-    await xapi.call('VM.clean_shutdown', vm._xapiRef)
+    await xapi.shutdownVm(vm._xapiRef)
   } catch (error) {
     const { code } = error
     if (

@@ -96,6 +96,7 @@ class XapiError extends BaseError {
     // slots than can be assigned later
     this.method = undefined
     this.url = undefined
+    this.task = undefined
   }
 }
 
@@ -188,7 +189,9 @@ const getTaskResult = task => {
     return Promise.reject(new Cancel('task canceled'))
   }
   if (status === 'failure') {
-    return Promise.reject(wrapError(task.error_info))
+    const error = wrapError(task.error_info)
+    error.task = task
+    return Promise.reject(error)
   }
   if (status === 'success') {
     // the result might be:
@@ -595,7 +598,10 @@ export class Xapi extends EventEmitter {
                 if (error != null && (response = error.response) != null) {
                   response.req.abort()
 
-                  const { headers: { location }, statusCode } = response
+                  const {
+                    headers: { location },
+                    statusCode,
+                  } = response
                   if (statusCode === 302 && location !== undefined) {
                     return doRequest(location)
                   }
@@ -777,15 +783,13 @@ export class Xapi extends EventEmitter {
       this._pool = object
 
       const eventWatchers = this._eventWatchers
-      if (eventWatchers !== undefined) {
-        forEach(object.other_config, (_, key) => {
-          const eventWatcher = eventWatchers[key]
-          if (eventWatcher !== undefined) {
-            delete eventWatchers[key]
-            eventWatcher(object)
-          }
-        })
-      }
+      Object.keys(object.other_config).forEach(key => {
+        const eventWatcher = eventWatchers[key]
+        if (eventWatcher !== undefined) {
+          delete eventWatchers[key]
+          eventWatcher(object)
+        }
+      })
     } else if (type === 'task') {
       if (prev === undefined) {
         ++this._nTasks

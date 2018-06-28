@@ -2,115 +2,134 @@ import _ from 'intl'
 import ActionButton from 'action-button'
 import React from 'react'
 import SortedTable from 'sorted-table'
+import StateButton from 'state-button'
 import { Card, CardBlock, CardHeader } from 'card'
 import { injectState, provideState } from '@julien-f/freactal'
-import { isEmpty, findKey, size } from 'lodash'
+import { isEmpty, find, size } from 'lodash'
 
 import NewSchedule from './new-schedule'
-import { FormGroup } from './utils'
+import { FormFeedback } from './utils'
 
 // ===================================================================
 
-const SCHEDULES_COLUMNS = [
-  {
-    itemRenderer: _ => _.cron,
-    sortCriteria: 'cron',
-    name: _('scheduleCron'),
-  },
-  {
-    itemRenderer: _ => _.timezone,
-    sortCriteria: 'timezone',
-    name: _('scheduleTimezone'),
-  },
-  {
-    itemRenderer: _ => _.exportRetention,
-    sortCriteria: _ => _.exportRetention,
-    name: _('scheduleExportRetention'),
-  },
-  {
-    itemRenderer: _ => _.snapshotRetention,
-    sortCriteria: _ => _.snapshotRetention,
-    name: _('scheduleSnapshotRetention'),
-  },
+const FEEDBACK_ERRORS = [
+  'missingSchedules',
+  'missingCopyRetention',
+  'missingExportRetention',
+  'missingSnapshotRetention',
 ]
-
-const SAVED_SCHEDULES_COLUMNS = [
-  {
-    itemRenderer: _ => _.name,
-    sortCriteria: 'name',
-    name: _('scheduleName'),
-    default: true,
-  },
-  ...SCHEDULES_COLUMNS,
-]
-
-const rowTransform = (schedule, { settings }) => {
-  const { exportRetention, snapshotRetention } = settings[schedule.id] || {}
-
-  return {
-    ...schedule,
-    exportRetention,
-    snapshotRetention,
-  }
-}
-
-const SAVED_SCHEDULES_INDIVIDUAL_ACTIONS = [
-  {
-    handler: (schedule, { editSchedule }) => editSchedule(schedule),
-    label: _('scheduleEdit'),
-    icon: 'edit',
-    disabled: (_, { disabledEdition }) => disabledEdition,
-    level: 'primary',
-  },
-  {
-    handler: (schedule, { deleteSchedule }) => deleteSchedule(schedule.id),
-    label: _('scheduleDelete'),
-    disabled: (_, { disabledDeletion }) => disabledDeletion,
-    icon: 'delete',
-    level: 'danger',
-  },
-]
-
-const NEW_SCHEDULES_INDIVIDUAL_ACTIONS = [
-  {
-    handler: (schedule, { editNewSchedule, newSchedules }) =>
-      editNewSchedule({
-        id: findKey(newSchedules, schedule),
-        ...schedule,
-      }),
-    label: _('scheduleEdit'),
-    disabled: (_, { disabledEdition }) => disabledEdition,
-    icon: 'edit',
-    level: 'primary',
-  },
-  {
-    handler: (schedule, { deleteNewSchedule, newSchedules }) =>
-      deleteNewSchedule(findKey(newSchedules, schedule)),
-    label: _('scheduleDelete'),
-    icon: 'delete',
-    level: 'danger',
-  },
-]
-
-// ===================================================================
 
 export default [
   injectState,
   provideState({
     computed: {
-      disabledDeletion: state =>
-        state.schedules.length + size(state.newSchedules) <= 1,
+      disabledDeletion: state => size(state.schedules) <= 1,
       disabledEdition: state =>
         state.editionMode !== undefined ||
-        (!state.exportMode && !state.snapshotMode),
+        (!state.exportMode && !state.copyMode && !state.snapshotMode),
+      error: state => find(FEEDBACK_ERRORS, error => state[error]),
+      individualActions: (
+        { disabledDeletion, disabledEdition },
+        { effects: { deleteSchedule, editSchedule } }
+      ) => [
+        {
+          disabled: disabledEdition,
+          handler: editSchedule,
+          icon: 'edit',
+          label: _('scheduleEdit'),
+          level: 'primary',
+        },
+        {
+          disabled: disabledDeletion,
+          handler: deleteSchedule,
+          icon: 'delete',
+          label: _('scheduleDelete'),
+          level: 'danger',
+        },
+      ],
+      rowTransform: ({ settings }) => schedule => {
+        const { exportRetention, copyRetention, snapshotRetention } =
+          settings[schedule.id] || {}
+
+        return {
+          ...schedule,
+          exportRetention,
+          copyRetention,
+          snapshotRetention,
+        }
+      },
+      schedulesColumns: (state, { effects: { toggleScheduleState } }) => {
+        const columns = [
+          {
+            itemRenderer: _ => _.name,
+            sortCriteria: 'name',
+            name: _('scheduleName'),
+            default: true,
+          },
+          {
+            itemRenderer: schedule => (
+              <StateButton
+                disabledLabel={_('stateDisabled')}
+                disabledTooltip={_('logIndicationToEnable')}
+                enabledLabel={_('stateEnabled')}
+                enabledTooltip={_('logIndicationToDisable')}
+                handler={toggleScheduleState}
+                handlerParam={schedule.id}
+                state={schedule.enabled}
+              />
+            ),
+            sortCriteria: 'enabled',
+            name: _('state'),
+          },
+          {
+            itemRenderer: _ => _.cron,
+            sortCriteria: 'cron',
+            name: _('scheduleCron'),
+          },
+          {
+            itemRenderer: _ => _.timezone,
+            sortCriteria: 'timezone',
+            name: _('scheduleTimezone'),
+          },
+        ]
+
+        if (state.exportMode) {
+          columns.push({
+            itemRenderer: _ => _.exportRetention,
+            sortCriteria: _ => _.exportRetention,
+            name: _('scheduleExportRetention'),
+          })
+        }
+
+        if (state.copyMode) {
+          columns.push({
+            itemRenderer: _ => _.copyRetention,
+            sortCriteria: _ => _.copyRetention,
+            name: _('scheduleCopyRetention'),
+          })
+        }
+
+        if (state.snapshotMode) {
+          columns.push({
+            itemRenderer: _ => _.snapshotRetention,
+            sortCriteria: _ => _.snapshotRetention,
+            name: _('scheduleSnapshotRetention'),
+          })
+        }
+        return columns
+      },
     },
   }),
   injectState,
   ({ effects, state }) => (
     <div>
-      <Card>
+      <FormFeedback
+        component={Card}
+        error={state.showErrors ? state.error !== undefined : undefined}
+        message={state.error !== undefined && _(state.error)}
+      >
         <CardHeader>
-          {_('backupSchedules')}
+          {_('backupSchedules')}*
           <ActionButton
             btnStyle='primary'
             className='pull-right'
@@ -121,48 +140,25 @@ export default [
           />
         </CardHeader>
         <CardBlock>
-          {isEmpty(state.schedules) &&
-            isEmpty(state.newSchedules) && (
-              <p className='text-md-center'>{_('noSchedules')}</p>
-            )}
-          {!isEmpty(state.schedules) && (
-            <FormGroup>
-              <label>
-                <strong>{_('backupSavedSchedules')}</strong>
-              </label>
-              <SortedTable
-                collection={state.schedules}
-                columns={SAVED_SCHEDULES_COLUMNS}
-                data-deleteSchedule={effects.deleteSchedule}
-                data-disabledDeletion={state.disabledDeletion}
-                data-disabledEdition={state.disabledEdition}
-                data-editSchedule={effects.editSchedule}
-                data-settings={state.settings}
-                individualActions={SAVED_SCHEDULES_INDIVIDUAL_ACTIONS}
-                rowTransform={rowTransform}
-              />
-            </FormGroup>
-          )}
-          {!isEmpty(state.newSchedules) && (
-            <FormGroup>
-              <label>
-                <strong>{_('backupNewSchedules')}</strong>
-              </label>
-              <SortedTable
-                collection={state.newSchedules}
-                columns={SCHEDULES_COLUMNS}
-                data-deleteNewSchedule={effects.deleteNewSchedule}
-                data-disabledEdition={state.disabledEdition}
-                data-editNewSchedule={effects.editNewSchedule}
-                data-newSchedules={state.newSchedules}
-                individualActions={NEW_SCHEDULES_INDIVIDUAL_ACTIONS}
-              />
-            </FormGroup>
+          {isEmpty(state.schedules) ? (
+            <p className='text-md-center'>{_('noSchedules')}</p>
+          ) : (
+            <SortedTable
+              collection={state.schedules}
+              columns={state.schedulesColumns}
+              individualActions={state.individualActions}
+              rowTransform={state.rowTransform}
+            />
           )}
         </CardBlock>
-      </Card>
+      </FormFeedback>
       {state.editionMode !== undefined && (
-        <NewSchedule schedule={state.tmpSchedule} />
+        <NewSchedule
+          copyMode={state.copyMode}
+          exportMode={state.exportMode}
+          schedule={state.tmpSchedule}
+          snapshotMode={state.snapshotMode}
+        />
       )}
     </div>
   ),
